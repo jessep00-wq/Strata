@@ -52,15 +52,16 @@ export async function POST(request: NextRequest): Promise<NextResponse<Scorecard
     }
 
     // TODO: Implement actual scorecard analysis logic here
-    // This is a placeholder implementation
+    // This is a placeholder implementation that returns mock data
+    // In production, this should analyze the scorecard data and return real results
     const analysisResult = {
       analysis: {
         processedData: body.scorecardData,
         timestamp: new Date().toISOString(),
         options: body.options || {}
       },
-      score: 0,
-      recommendations: []
+      score: 0, // Placeholder: should calculate actual score
+      recommendations: [] // Placeholder: should generate actual recommendations
     };
 
     // Return successful response
