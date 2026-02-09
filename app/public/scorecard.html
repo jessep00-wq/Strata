@@ -1,0 +1,729 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Provider Performance Scorecard</title>
+
+  <meta name="color-scheme" content="dark" />
+
+  <!-- Tailwind (CDN) -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              50: '#f0f9ff',
+              100: '#e0f2fe',
+              500: '#0ea5e9',
+              600: '#0284c7',
+              900: '#0c4a6e',
+            },
+            success: '#10b981',
+            warning: '#f59e0b',
+            danger: '#ef4444',
+            surface: '#0f172a',
+          },
+          fontFamily: {
+            display: ['Outfit', 'sans-serif'],
+            body: ['Plus Jakarta Sans', 'sans-serif'],
+          },
+          animation: {
+            'pulse-slow': 'pulse 4s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+          },
+        }
+      }
+    }
+  </script>
+
+  <style>
+    body {
+      font-family: 'Plus Jakarta Sans', sans-serif;
+      background: radial-gradient(circle at top right, #1e293b, #0f172a);
+      color: #f8fafc;
+      min-height: 100vh;
+    }
+    .glass {
+      background: rgba(30, 41, 59, 0.6);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+    .text-gradient {
+      background: linear-gradient(to right, #38bdf8, #818cf8);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    .custom-scrollbar::-webkit-scrollbar { height: 8px; width: 8px; }
+    .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+    .custom-scrollbar::-webkit-scrollbar-thumb {
+      background: rgba(255, 255, 255, 0.12);
+      border-radius: 999px;
+    }
+  </style>
+</head>
+
+<body class="p-4 md:p-8">
+
+  <!-- BLANK STATE GATE -->
+  <div id="blankState" class="min-h-[70vh] flex items-center justify-center">
+    <div class="glass p-10 rounded-3xl max-w-xl w-full text-center">
+      <h2 class="text-3xl font-display font-bold mb-4" style="font-family:'Outfit',sans-serif;">Start New Provider Analysis</h2>
+      <p class="text-slate-400 mb-6">Enter required details and upload a monthly provider scorecard to generate the performance report.</p>
+
+      <div class="grid grid-cols-1 gap-4 text-left">
+        <div>
+          <label class="text-xs uppercase text-slate-400">Provider Name</label>
+          <input id="inputProvider" class="w-full mt-1 bg-slate-900/60 border border-slate-700 rounded-xl p-3 text-white" />
+        </div>
+        <div class="grid grid-cols-2 gap-4">
+          <div>
+            <label class="text-xs uppercase text-slate-400">Reporting Month</label>
+            <input id="inputMonth" placeholder="January" class="w-full mt-1 bg-slate-900/60 border border-slate-700 rounded-xl p-3 text-white" />
+          </div>
+          <div>
+            <label class="text-xs uppercase text-slate-400">Reporting Year</label>
+            <input id="inputYear" placeholder="2026" class="w-full mt-1 bg-slate-900/60 border border-slate-700 rounded-xl p-3 text-white" />
+          </div>
+        </div>
+        <div>
+          <label class="text-xs uppercase text-slate-400">Upload Monthly Provider Scorecard</label>
+          <input id="inputFile" type="file" multiple accept="application/pdf,image/*" class="w-full mt-1 bg-slate-900/60 border border-slate-700 rounded-xl p-3 text-white" />
+          <p class="text-xs text-slate-400 mt-1">You may upload multiple files (PDFs and images). Each upload set is treated as one reporting period.</p>
+        </div>
+
+        <button id="generateBtn" disabled class="mt-4 w-full bg-brand-500/30 text-white font-semibold py-3 rounded-xl opacity-50 cursor-not-allowed">Generate Scorecard</button>
+        <div id="gateError" class="hidden text-xs text-danger mt-2">Please complete all fields and upload at least one file.</div>
+
+        <!-- Tiny in-page test output (for debugging; hidden by default) -->
+        <pre id="testResults" class="hidden mt-4 text-xs text-slate-400 whitespace-pre-wrap"></pre>
+      </div>
+    </div>
+  </div>
+
+  <!-- APP SHELL (hidden until gated) -->
+  <div id="appShell" class="hidden">
+
+    <!-- Header Section -->
+    <header class="max-w-7xl mx-auto mb-10 flex flex-col md:flex-row md:items-end justify-between gap-6">
+      <div>
+        <div id="pillPeriod" class="inline-flex items-center px-3 py-1 rounded-full bg-brand-500/10 text-brand-500 text-xs font-semibold uppercase tracking-wider mb-4 border border-brand-500/20">
+          Reporting Period: —
+        </div>
+        <h1 class="text-4xl md:text-5xl font-display font-bold text-white mb-2" style="font-family:'Outfit',sans-serif;">
+          <span id="orgOrProvider">Provider</span> <span class="text-gradient">Performance Scorecard</span>
+        </h1>
+        <p class="text-slate-400 text-lg" id="subhead">Comprehensive Provider Review: Access + Quality + Revenue</p>
+      </div>
+
+      <div class="flex gap-4">
+        <div class="glass px-6 py-4 rounded-2xl flex flex-col items-center min-w-[110px]">
+          <span class="text-slate-400 text-xs uppercase font-semibold">Encounters</span>
+          <span class="text-2xl font-bold" style="font-family:'Outfit',sans-serif;" id="encNow">—</span>
+          <span class="text-[11px] text-slate-400" id="encTrend">—</span>
+        </div>
+        <div class="glass px-6 py-4 rounded-2xl flex flex-col items-center min-w-[110px]">
+          <span class="text-slate-400 text-xs uppercase font-semibold">UDS Measures</span>
+          <span class="text-2xl font-bold" style="font-family:'Outfit',sans-serif;" id="totalMeasures">—</span>
+          <span class="text-[11px] text-slate-400">Tracked</span>
+        </div>
+        <div class="glass px-6 py-4 rounded-2xl border border-success/30 flex flex-col items-center min-w-[110px]">
+          <span class="text-slate-400 text-xs uppercase font-semibold">Deficient</span>
+          <span class="text-2xl font-bold text-danger" style="font-family:'Outfit',sans-serif;" id="deficientCount">—</span>
+          <span class="text-[11px] text-slate-400">Below target</span>
+        </div>
+      </div>
+    </header>
+
+    <!-- Main Grid Layout -->
+    <main class="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-12 gap-6 mb-12">
+
+      <!-- Left Bento -->
+      <div class="lg:col-span-8 grid grid-cols-1 md:grid-cols-2 gap-6">
+
+        <!-- Strengths Card -->
+        <div class="glass p-6 rounded-3xl relative overflow-hidden group hover:border-success/50 transition-all duration-300">
+          <div class="absolute -right-4 -top-4 w-24 h-24 bg-success/10 rounded-full blur-2xl group-hover:bg-success/20 transition-all"></div>
+          <h3 class="text-xl font-bold mb-4 flex items-center gap-2" style="font-family:'Outfit',sans-serif;">
+            <svg class="w-5 h-5 text-success" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+            Critical Strengths
+          </h3>
+          <ul class="space-y-3" id="strengthsList"></ul>
+        </div>
+
+        <!-- Gaps Card -->
+        <div class="glass p-6 rounded-3xl relative overflow-hidden group hover:border-danger/50 transition-all duration-300">
+          <div class="absolute -right-4 -top-4 w-24 h-24 bg-danger/10 rounded-full blur-2xl group-hover:bg-danger/20 transition-all"></div>
+          <h3 class="text-xl font-bold mb-4 flex items-center gap-2" style="font-family:'Outfit',sans-serif;">
+            <svg class="w-5 h-5 text-danger" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
+            Operational Gaps
+          </h3>
+          <ul class="space-y-3" id="gapsList"></ul>
+        </div>
+
+        <!-- Root Cause + Revenue -->
+        <div class="glass p-6 rounded-3xl md:col-span-2 border border-brand-500/20 bg-gradient-to-br from-slate-800/50 to-brand-900/20">
+          <h3 class="text-xl font-bold mb-6 flex items-center gap-2" style="font-family:'Outfit',sans-serif;">
+            <svg class="w-5 h-5 text-brand-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"></path></svg>
+            Universal Scorecard Review
+          </h3>
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div class="space-y-2">
+              <h4 class="text-brand-500 font-semibold text-sm">The Why</h4>
+              <p class="text-xs text-slate-300 leading-relaxed" id="whyText">—</p>
+            </div>
+            <div class="space-y-2">
+              <h4 class="text-brand-500 font-semibold text-sm">The Money</h4>
+              <p class="text-xs text-slate-300 leading-relaxed" id="moneyText">—</p>
+            </div>
+            <div class="space-y-2">
+              <h4 class="text-brand-500 font-semibold text-sm">The How</h4>
+              <p class="text-xs text-slate-300 leading-relaxed" id="howText">—</p>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Right Sidebar -->
+      <div class="lg:col-span-4 space-y-6">
+        <div class="glass p-6 rounded-3xl border border-brand-500/30">
+          <h3 class="text-xl font-bold mb-6 flex items-center gap-2" style="font-family:'Outfit',sans-serif;">
+            <svg class="w-5 h-5 text-brand-500 animate-pulse-slow" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
+            Next 30-Day Priorities
+          </h3>
+          <div class="space-y-4" id="priorities"></div>
+        </div>
+
+        <div class="glass p-6 rounded-3xl border border-brand-500/20">
+          <h3 class="text-xl font-bold mb-5" style="font-family:'Outfit',sans-serif;">Revenue Opportunity Snapshot</h3>
+          <div class="space-y-3">
+            <div class="flex items-center justify-between">
+              <div class="text-sm text-slate-300">AWVs Completed</div>
+              <div class="text-lg" style="font-family:'Outfit',sans-serif;" id="awvDone">—</div>
+            </div>
+            <div class="flex items-center justify-between">
+              <div class="text-sm text-slate-300">AWV Goal</div>
+              <div class="text-lg" style="font-family:'Outfit',sans-serif;" id="awvGoal">—</div>
+            </div>
+            <div class="flex items-center justify-between">
+              <div class="text-sm text-slate-300">Missed AWVs</div>
+              <div class="text-lg text-warning" style="font-family:'Outfit',sans-serif;" id="awvMissed">—</div>
+            </div>
+            <div class="flex items-center justify-between">
+              <div class="text-sm text-slate-300">Est. $ Left on Table</div>
+              <div class="text-lg text-brand-500" style="font-family:'Outfit',sans-serif;" id="awvDollars">—</div>
+            </div>
+            <div class="flex items-center justify-between">
+              <div class="text-sm text-slate-300">TOCs</div>
+              <div class="text-lg" style="font-family:'Outfit',sans-serif;" id="tocLine">—</div>
+            </div>
+          </div>
+          <div class="mt-4 text-xs text-slate-400">AWV estimate uses $200 per visit. This is a coaching lever: capture and documentation consistency.</div>
+        </div>
+      </div>
+
+    </main>
+
+    <!-- Highlights -->
+    <section class="max-w-7xl mx-auto mb-12">
+      <h2 class="text-2xl font-bold mb-6 px-2" style="font-family:'Outfit',sans-serif;">Top Performing Measures</h2>
+      <div class="flex gap-4 overflow-x-auto pb-6 px-2 custom-scrollbar" id="topScroll"></div>
+    </section>
+
+    <!-- Table -->
+    <section class="max-w-7xl mx-auto mb-12">
+      <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
+        <div class="px-2">
+          <h2 class="text-2xl font-bold" style="font-family:'Outfit',sans-serif;">Key Measure Performance</h2>
+          <div class="text-xs text-slate-400 mt-1">Targets fixed per benchmark list. Current build assumes 50% performance for all UDS measures.</div>
+        </div>
+
+        <div class="flex flex-col sm:flex-row gap-3 sm:items-center">
+          <div class="flex gap-2 bg-slate-800/50 p-1 rounded-xl border border-slate-700">
+            <button id="btnAll" class="px-4 py-1.5 rounded-lg text-xs font-semibold bg-slate-700 text-white transition-all">All</button>
+            <button id="btnDef" class="px-4 py-1.5 rounded-lg text-xs font-semibold hover:bg-slate-700 text-slate-400 transition-all">Deficient</button>
+          </div>
+          <div class="bg-slate-800/50 p-2 rounded-xl border border-slate-700">
+            <input id="search" class="bg-transparent text-sm outline-none placeholder:text-slate-500 text-slate-100 w-[240px]" placeholder="Search measures…" />
+          </div>
+        </div>
+      </div>
+
+      <div class="glass rounded-[2rem] overflow-hidden">
+        <div class="overflow-x-auto">
+          <table class="w-full text-left border-collapse" id="performanceTable">
+            <thead>
+              <tr class="bg-slate-800/40 text-slate-400 text-[10px] uppercase tracking-widest font-bold">
+                <th class="px-6 py-4">Measure</th>
+                <th class="px-6 py-4">Score</th>
+                <th class="px-6 py-4">Target</th>
+                <th class="px-6 py-4">Gap</th>
+                <th class="px-6 py-4">Status</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-800" id="tbody"></tbody>
+          </table>
+        </div>
+        <div class="p-6 bg-slate-800/20 text-center text-xs text-slate-500">Single-file mini-app. Filters and search are live.</div>
+      </div>
+    </section>
+
+  </div>
+
+  <script>
+  // ==========================================
+  // Provider Performance Scorecard Mini-App
+  // AI Ingestion Mode (Option C)
+  // ==========================================
+
+  // If hosted on the same Vercel project as the API, keep this as a relative path.
+  // If you open this HTML locally, set this to your deployed URL + path.
+  const API_ENDPOINT = '/api/analyze-scorecard';
+
+  // Benchmarks (targets). Baseline set excludes Dental Sealants and HIV & Pregnant.
+  // direction: 'high' means higher is better; 'low' means lower is better
+  const BENCHMARKS = [
+    { name: 'Childhood Immunization', target: 25.0, direction: 'high' },
+    { name: 'Child Weight Assessment', target: 96.0, direction: 'high' },
+    { name: 'BMI Screening (18+)', target: 95.0, direction: 'high' },
+    { name: 'Depression Remission (12 mo)', target: 30.0, direction: 'high' },
+    { name: 'Depression Screening & Follow-up', target: 90.0, direction: 'high' },
+    { name: 'Tobacco Use Screening/Cessation', target: 99.0, direction: 'high' },
+    { name: 'Colorectal Cancer Screening', target: 65.0, direction: 'high' },
+    { name: 'Cervical Cancer Screening', target: 60.0, direction: 'high' },
+    { name: 'Breast Cancer Screening (50-74)', target: 70.0, direction: 'high' },
+    { name: 'Hypertension Control', target: 85.0, direction: 'high' },
+    { name: 'Diabetes A1c > 9', target: 16.0, direction: 'low' },
+    { name: 'Statin Therapy for ASCVD', target: 95.0, direction: 'high' },
+    { name: 'Initiation of SUD Treatment', target: 50.0, direction: 'high' },
+    { name: 'Engagement of SUD Treatment', target: 25.0, direction: 'high' },
+    { name: 'IVD Aspirin Use', target: 92.0, direction: 'high' },
+    { name: 'HIV Screening', target: 75.0, direction: 'high' },
+    { name: 'HIV Linkage to Care', target: 95.0, direction: 'high' },
+  ];
+
+  // App state
+  const appState = {
+    provider: null,
+    measures: [],
+    narrative: null,
+    filterMode: 'ALL',
+    search: ''
+  };
+
+  // --------- helpers ---------
+  const fmtPct = (n, d = 1) => `${Number(n).toFixed(d)}%`;
+
+  function safeText(id, value) {
+    const el = document.getElementById(id);
+    if (el) el.textContent = value;
+  }
+
+  function safeHTML(id, value) {
+    const el = document.getElementById(id);
+    if (el) el.innerHTML = value;
+  }
+
+  function cleanMeasureName(name) {
+    if (!name) return '';
+    // Strip (CMS...) and (NQF...) parenthetical codes
+    return String(name)
+      .replace(/\s*\([^)]*(CMS|NQF)[^)]*\)\s*/gi, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
+
+  function status(rate, target, direction) {
+    if (direction === 'low') {
+      if (rate <= target) return { tag: 'MEETS', tone: 'success' };
+      if (rate <= target * 1.10) return { tag: 'NEAR', tone: 'warning' };
+      return { tag: 'BELOW', tone: 'danger' };
+    }
+    if (rate >= target) return { tag: 'MEETS', tone: 'success' };
+    if (rate >= target - 5) return { tag: 'NEAR', tone: 'warning' };
+    return { tag: 'BELOW', tone: 'danger' };
+  }
+
+  function gap(rate, target) {
+    return rate - target;
+  }
+
+  function gapLabel(rate, target, direction) {
+    const g = gap(rate, target);
+    if (direction === 'low') return g <= 0 ? `${Math.abs(g).toFixed(1)}%` : `+${g.toFixed(1)}%`;
+    return g >= 0 ? `+${g.toFixed(1)}%` : `${g.toFixed(1)}%`;
+  }
+
+  function statusPill(tag, tone) {
+    const map = {
+      success: 'bg-success/10 text-success border border-success/20',
+      warning: 'bg-warning/10 text-warning border border-warning/20',
+      danger: 'bg-danger/10 text-danger border border-danger/20'
+    };
+    return `<span class=\"px-2 py-1 rounded-md text-[10px] ${map[tone]} font-bold\">${tag}</span>`;
+  }
+
+  function metricToneClass(tone) {
+    if (tone === 'success') return 'text-success';
+    if (tone === 'warning') return 'text-warning';
+    return 'text-danger';
+  }
+
+  function trendText(enc, prior) {
+    const p = Number(prior);
+    if (!p) return '—';
+    const c = Number(enc);
+    const pct = ((c - p) / p) * 100;
+    const up = pct >= 0;
+    return `${up ? '▲' : '▼'} ${fmtPct(Math.abs(pct), 1)} MoM`;
+  }
+
+  function normalizeMeasures(rawMeasures) {
+    const bmByName = new Map(BENCHMARKS.map(b => [b.name.toLowerCase(), b]));
+
+    return (rawMeasures || [])
+      .map(r => {
+        const cleaned = cleanMeasureName(r.name);
+        const bm = bmByName.get(cleaned.toLowerCase());
+
+        const numerator = Number(r.numerator ?? r.num ?? 0);
+        const denominator = Number(r.denominator ?? r.den ?? 0);
+        const rate = denominator > 0 ? (numerator / denominator) * 100 : 0;
+
+        const target = bm ? bm.target : Number(r.target ?? 0);
+        const direction = bm ? bm.direction : (r.direction === 'low' ? 'low' : 'high');
+        const s = status(rate, target, direction);
+
+        return {
+          name: bm ? bm.name : cleaned,
+          numerator,
+          denominator,
+          rate,
+          target,
+          direction,
+          tag: s.tag,
+          tone: s.tone,
+        };
+      })
+      .filter(m => m.name);
+  }
+
+  function pickTopBottom(measures) {
+    const scored = (measures || []).map(m => {
+      const delta = m.direction === 'low' ? (m.target - m.rate) : (m.rate - m.target);
+      return { ...m, delta };
+    });
+
+    const top = [...scored].sort((a, b) => b.delta - a.delta).slice(0, 3);
+    const bottom = [...scored].sort((a, b) => a.delta - b.delta).slice(0, 3);
+    return { top, bottom };
+  }
+
+  // --------- overlay ---------
+  function showOverlay(message) {
+    let overlay = document.getElementById('overlay');
+    if (!overlay) {
+      overlay = document.createElement('div');
+      overlay.id = 'overlay';
+      overlay.className = 'fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70';
+      overlay.innerHTML = `
+        <div class=\"glass rounded-3xl p-6 w-[92vw] max-w-lg border border-brand-500/20\">
+          <div class=\"flex items-center gap-3\">
+            <div class=\"w-10 h-10 rounded-2xl bg-brand-500/10 border border-brand-500/20 flex items-center justify-center\">
+              <svg class=\"w-5 h-5 text-brand-500 animate-spin\" viewBox=\"0 0 24 24\" fill=\"none\"><path d=\"M12 2a10 10 0 1 0 10 10\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\"/></svg>
+            </div>
+            <div>
+              <div class=\"text-white font-semibold\" style=\"font-family:'Outfit',sans-serif;\">Analyzing scorecard</div>
+              <div id=\"overlayMsg\" class=\"text-xs text-slate-400 mt-0.5\"></div>
+            </div>
+          </div>
+          <div class=\"mt-4 text-[11px] text-slate-500\">If this stays here, your Vercel endpoint is not deployed or not reachable.</div>
+        </div>
+      `;
+      document.body.appendChild(overlay);
+    }
+    const msg = document.getElementById('overlayMsg');
+    if (msg) msg.textContent = message || '';
+    overlay.classList.remove('hidden');
+  }
+
+  function hideOverlay() {
+    const overlay = document.getElementById('overlay');
+    if (overlay) overlay.classList.add('hidden');
+  }
+
+  function showGateError(message) {
+    const gateError = document.getElementById('gateError');
+    if (gateError) {
+      gateError.textContent = message;
+      gateError.classList.remove('hidden');
+    }
+  }
+
+  // --------- API ---------
+  async function analyzeWithAI({ providerName, reportingMonth, reportingYear, files }) {
+    const fd = new FormData();
+    fd.append('providerName', providerName);
+    fd.append('reportingMonth', reportingMonth);
+    fd.append('reportingYear', reportingYear);
+    for (const f of files) fd.append('files', f, f.name);
+
+    const res = await fetch(API_ENDPOINT, { method: 'POST', body: fd });
+    if (!res.ok) {
+      const text = await res.text().catch(() => '');
+      throw new Error(`Endpoint error (${res.status}). ${text || 'No details returned.'}`);
+    }
+    return await res.json();
+  }
+
+  // --------- render ---------
+  function renderScorecard() {
+    const p = appState.provider;
+    const measures = appState.measures || [];
+
+    const deficient = measures.filter(m => m.tag !== 'MEETS').length;
+    const { top, bottom } = pickTopBottom(measures);
+
+    safeText('pillPeriod', `Reporting Period: ${p.reportingMonth} ${p.reportingYear}`);
+    safeText('orgOrProvider', p.providerName);
+
+    const encNow = p.currentEncounters ?? '—';
+    const encPrior = p.priorEncounters ?? '—';
+
+    safeText('subhead', `Encounters ${encNow} (prior ${encPrior}) • AWVs ${p.awvsCompleted ?? '—'}/${p.awvsGoal ?? '—'} • TOCs ${p.tocsCompleted ?? '—'}/${p.tocsGoal ?? '—'}`);
+
+    safeText('encNow', String(encNow));
+    safeText('encTrend', trendText(p.currentEncounters ?? 0, p.priorEncounters ?? 0));
+    safeText('totalMeasures', String(measures.length));
+    safeText('deficientCount', String(deficient));
+
+    const missedAwvs = Math.max(0, Number(p.awvsGoal ?? 0) - Number(p.awvsCompleted ?? 0));
+    const awvDollars = missedAwvs * 200;
+
+    safeText('awvDone', String(p.awvsCompleted ?? '—'));
+    safeText('awvGoal', String(p.awvsGoal ?? '—'));
+    safeText('awvMissed', String(missedAwvs));
+    safeText('awvDollars', `$${awvDollars.toLocaleString()}`);
+    safeText('tocLine', `${p.tocsCompleted ?? '—'}/${p.tocsGoal ?? '—'}`);
+
+    // Strengths / Gaps
+    const li = (tone, k, v) => `
+      <li class=\"flex items-start gap-3\">
+        <span class=\"mt-1 w-1.5 h-1.5 rounded-full ${tone} shrink-0\"></span>
+        <p class=\"text-sm text-slate-300\"><span class=\"text-white font-semibold\">${k}</span> ${v}</p>
+      </li>`;
+
+    const strengths = top.map(m => ({
+      k: m.name + ':',
+      v: `Score ${fmtPct(m.rate, 1)} vs target ${fmtPct(m.target, 1)} (gap ${gapLabel(m.rate, m.target, m.direction)}).`
+    }));
+
+    const gaps = bottom.map(m => ({
+      k: m.name + ':',
+      v: `Score ${fmtPct(m.rate, 1)} vs target ${fmtPct(m.target, 1)} (gap ${gapLabel(m.rate, m.target, m.direction)}).`
+    }));
+
+    safeHTML('strengthsList', strengths.length ? strengths.map(x => li('bg-success', x.k, x.v)).join('') : li('bg-success', 'No strengths:', 'AI did not return measure performance.'));
+    safeHTML('gapsList', gaps.length ? gaps.map(x => li('bg-danger', x.k, x.v)).join('') : li('bg-danger', 'No gaps:', 'AI did not return measure performance.'));
+
+    // Narrative
+    const why = appState.narrative?.why || 'Performance usually breaks in two places: reliability of the workflow, and reliability of documentation landing in the fields the measures actually read.';
+    const how = appState.narrative?.how || 'Standardize the lane: eligibility list, staff-owned scheduling, and a template that forces discrete capture. Audit exceptions weekly.';
+
+    safeText('whyText', why);
+    safeText('moneyText', `AWVs are ${p.awvsCompleted ?? '—'}/${p.awvsGoal ?? '—'}. That’s ${missedAwvs} missed visits. At $200 per AWV, that is roughly $${awvDollars.toLocaleString()} in recoverable revenue.`);
+    safeText('howText', how);
+
+    const priorities = (appState.narrative?.priorities && appState.narrative.priorities.length)
+      ? appState.narrative.priorities
+      : [
+          { t: 'AWV Conversion Lane', d: 'Daily eligibility list, warm handoff scheduling, and a hard stop template so completion is unmistakable.' },
+          { t: 'TOC Capture Discipline', d: 'Define what counts, assign ownership, and standardize coding so transitions don’t disappear into narrative.' },
+          { t: 'Bottom-Measure Denominator Control', d: 'Roster the worst gaps monthly, assign outreach ownership, and maintain a defendable exceptions list.' },
+        ];
+
+    safeHTML('priorities', priorities.map((p0, idx) => `
+      <div class=\"p-4 rounded-2xl bg-slate-900/50 border border-slate-700 hover:border-brand-500/50 transition-colors\">
+        <span class=\"text-[10px] font-bold text-brand-500 uppercase\">Priority ${String(idx + 1).padStart(2, '0')}</span>
+        <h4 class=\"font-bold text-white mb-1\">${p0.t}</h4>
+        <p class=\"text-xs text-slate-400 leading-relaxed\">${p0.d}</p>
+      </div>
+    `).join(''));
+
+    // Top scroll
+    const topCard = (m) => {
+      const valClass = m.tone === 'success' ? 'text-success' : (m.tone === 'warning' ? 'text-warning' : 'text-danger');
+      const bgIcon = m.tone === 'success' ? 'bg-success/10 text-success' : (m.tone === 'warning' ? 'bg-warning/10 text-warning' : 'bg-danger/10 text-danger');
+      return `
+        <div class=\"min-w-[300px] glass p-6 rounded-3xl\">
+          <div class=\"flex justify-between items-start mb-4\">
+            <span class=\"w-10 h-10 rounded-xl ${bgIcon} flex items-center justify-center\">
+              <svg class=\"w-6 h-6\" fill=\"none\" stroke=\"currentColor\" viewBox=\"0 0 24 24\"><path stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"2\" d=\"M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z\"></path></svg>
+            </span>
+            <span class=\"text-3xl font-bold ${valClass}\" style=\"font-family:'Outfit',sans-serif;\">${fmtPct(m.rate, 1)}</span>
+          </div>
+          <h4 class=\"font-bold mb-1\">${m.name}</h4>
+          <p class=\"text-xs text-slate-400\">Target: ${fmtPct(m.target, 1)} — Gap: ${gapLabel(m.rate, m.target, m.direction)}.</p>
+        </div>
+      `;
+    };
+
+    safeHTML('topScroll', top.map(topCard).join(''));
+
+    // Table
+    const tbody = document.getElementById('tbody');
+    if (tbody) {
+      tbody.innerHTML = measures.map(m => {
+        const scoreClass = metricToneClass(m.tone);
+        const g = gapLabel(m.rate, m.target, m.direction);
+        const gapClass = m.tone === 'success' ? 'text-success' : (m.tone === 'warning' ? 'text-warning' : 'text-danger');
+        return `
+          <tr class=\"group hover:bg-slate-800/30 transition-colors\" data-status=\"${m.tag}\">
+            <td class=\"px-6 py-4\">
+              <div class=\"font-semibold text-white\">${m.name}</div>
+              <div class=\"text-[10px] text-slate-500 font-mono\">${m.numerator}/${m.denominator}${m.direction === 'low' ? ' • INVERSE' : ''}</div>
+            </td>
+            <td class=\"px-6 py-4 font-mono ${scoreClass}\">${fmtPct(m.rate, 1)}</td>
+            <td class=\"px-6 py-4 text-slate-400\">${fmtPct(m.target, 1)}</td>
+            <td class=\"px-6 py-4 ${gapClass}\">${g}</td>
+            <td class=\"px-6 py-4\">${statusPill(m.tag, m.tone)}</td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    // Filters
+    const btnAll = document.getElementById('btnAll');
+    const btnDef = document.getElementById('btnDef');
+    const search = document.getElementById('search');
+
+    function setMode(mode) {
+      appState.filterMode = mode;
+      if (btnAll && btnDef) {
+        if (mode === 'ALL') {
+          btnAll.className = 'px-4 py-1.5 rounded-lg text-xs font-semibold bg-slate-700 text-white transition-all';
+          btnDef.className = 'px-4 py-1.5 rounded-lg text-xs font-semibold hover:bg-slate-700 text-slate-400 transition-all';
+        } else {
+          btnDef.className = 'px-4 py-1.5 rounded-lg text-xs font-semibold bg-slate-700 text-white transition-all';
+          btnAll.className = 'px-4 py-1.5 rounded-lg text-xs font-semibold hover:bg-slate-700 text-slate-400 transition-all';
+        }
+      }
+      renderFiltered();
+    }
+
+    function renderFiltered() {
+      if (!tbody) return;
+      const q = (appState.search || '').trim().toLowerCase();
+      const rows = Array.from(tbody.querySelectorAll('tr'));
+      rows.forEach(row => {
+        const name = (row.querySelector('td')?.innerText || '').toLowerCase();
+        const s = row.getAttribute('data-status');
+        const passQ = name.includes(q);
+        const passMode = (appState.filterMode === 'ALL') ? true : (s !== 'MEETS');
+        row.style.display = (passQ && passMode) ? '' : 'none';
+      });
+    }
+
+    btnAll?.addEventListener('click', () => setMode('ALL'));
+    btnDef?.addEventListener('click', () => setMode('DEF'));
+    search?.addEventListener('input', (e) => { appState.search = e.target.value || ''; renderFiltered(); });
+
+    setMode('ALL');
+  }
+
+  // --------- gate ---------
+  function bindGate() {
+    const inputProvider = document.getElementById('inputProvider');
+    const inputMonth = document.getElementById('inputMonth');
+    const inputYear = document.getElementById('inputYear');
+    const inputFile = document.getElementById('inputFile');
+    const generateBtn = document.getElementById('generateBtn');
+    const blankState = document.getElementById('blankState');
+    const appShell = document.getElementById('appShell');
+
+    if (!inputProvider || !inputMonth || !inputYear || !inputFile || !generateBtn || !blankState || !appShell) return;
+
+    function checkReady() {
+      const ready = Boolean(inputProvider.value.trim())
+        && Boolean(inputMonth.value.trim())
+        && Boolean(inputYear.value.trim())
+        && (inputFile.files && inputFile.files.length > 0);
+
+      generateBtn.disabled = !ready;
+      generateBtn.className = ready
+        ? 'mt-4 w-full bg-brand-500 hover:bg-brand-600 text-white font-semibold py-3 rounded-xl transition-colors'
+        : 'mt-4 w-full bg-brand-500/30 text-white font-semibold py-3 rounded-xl opacity-50 cursor-not-allowed';
+
+      if (ready) {
+        document.getElementById('gateError')?.classList.add('hidden');
+      }
+    }
+
+    [inputProvider, inputMonth, inputYear].forEach(el => el.addEventListener('input', checkReady));
+    inputFile.addEventListener('change', checkReady);
+    checkReady();
+
+    generateBtn.addEventListener('click', async () => {
+      if (generateBtn.disabled) {
+        showGateError('Please complete all fields and upload at least one file.');
+        return;
+      }
+
+      const providerName = inputProvider.value.trim();
+      const reportingMonth = inputMonth.value.trim();
+      const reportingYear = inputYear.value.trim();
+      const files = Array.from(inputFile.files || []);
+
+      blankState.classList.add('hidden');
+      appShell.classList.remove('hidden');
+      showOverlay(`Uploading ${files.length} file(s) for extraction…`);
+
+      try {
+        const result = await analyzeWithAI({ providerName, reportingMonth, reportingYear, files });
+
+        appState.provider = result.provider || { providerName, reportingMonth, reportingYear };
+        appState.measures = normalizeMeasures(result.measures || []);
+        appState.narrative = result.narrative || null;
+
+        if (!appState.measures.length) {
+          appState.measures = BENCHMARKS.map(b => {
+            const s = status(0, b.target, b.direction);
+            return {
+              name: b.name,
+              numerator: 0,
+              denominator: 0,
+              rate: 0,
+              target: b.target,
+              direction: b.direction,
+              tag: s.tag,
+              tone: s.tone,
+            };
+          });
+        }
+
+        hideOverlay();
+        renderScorecard();
+      } catch (e) {
+        hideOverlay();
+        blankState.classList.remove('hidden');
+        appShell.classList.add('hidden');
+        showGateError(`Analysis failed. ${e?.message || 'Unknown error.'} (This page requires the Vercel /api/analyze-scorecard endpoint to be deployed.)`);
+      }
+    });
+  }
+
+  document.addEventListener('DOMContentLoaded', bindGate);
+</script>
+
+</body>
+</html>
