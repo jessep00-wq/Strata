@@ -138,8 +138,8 @@ Return JSON with this schema:
     const data = await oaiRes.json();
 
     const raw =
-      data?.output?.[0]?.content?.find((c: any) => c.type === "output_text")?.text ||
       data?.output_text ||
+      data?.output?.find((c: any) => c.type === "output_text")?.text ||
       "";
 
     let parsed: any;
