@@ -137,9 +137,11 @@ Return JSON with this schema:
 
     const data = await oaiRes.json();
 
+    // Extract text from OpenAI v1/responses format
+    // Try output_text convenience field first, then parse output array
     const raw =
-      data?.output?.[0]?.content?.find((c: any) => c.type === "output_text")?.text ||
       data?.output_text ||
+      data?.output?.find((c: any) => c.type === "output_text")?.text ||
       "";
 
     let parsed: any;
